@@ -1,0 +1,1 @@
+{"SUCCESS":"success","ERROR":"error","WARNING":"warning","IsWarning":false,"IsError":false,"IsSuccess":true,"GetResponseStatus":2,"Object":null,"StatusCode":0,"Message":"Attendance Submitted Successfully...","StatusType":"success","Title":"Success"}
