@@ -1,6 +1,11 @@
 import axios from 'axios';
 import fs from 'fs';
 import 'dotenv/config';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 import { extractTokensAndCsrf,generatePayload } from './utils.js';
 import { getreq, login } from './functions.js';
@@ -20,19 +25,26 @@ const SubmitAttendance = async (username,password,direction) => {
     // const username = '31';
     // const password = 'S21@';
     // const direction = 'Out';
-    const remark = 'attendance';
-    const res  = await axios.get('https://cloudtechservice.nimbleerp.com/');
-    const session = extractTokensAndCsrf(res);
-    const payload = generatePayload(session.csrfAndSeed, username, password, direction, remark);
-    config.headers['cookie'] = `${session.cookies.sessionid} __RequestVerificationToken=${session.cookies.__RequestVerificationToken}`;
-
-    const url = "https://cloudtechservice.nimbleerp.com/Attendance/QuickAttendanceRequest/QuickAttendance";
-
-
-
-    const resp = await axios.post(url,payload,config);
-    console.log(resp.data);
-    fs.writeFileSync("a.txt",JSON.stringify(resp.data))
+    try{
+        const remark = 'attendance';
+        const res  = await axios.get('https://cloudtechservice.nimbleerp.com/');
+        const session = extractTokensAndCsrf(res);
+        const payload = generatePayload(session.csrfAndSeed, username, password, direction, remark);
+        config.headers['cookie'] = `${session.cookies.sessionid} __RequestVerificationToken=${session.cookies.__RequestVerificationToken}`;
+        
+        const url = "https://cloudtechservice.nimbleerp.com/Attendance/QuickAttendanceRequest/QuickAttendance";
+        
+        
+        
+        const resp = await axios.post(url,payload,config);
+        console.log(resp.data);
+        fs.writeFileSync("a.txt",JSON.stringify(resp.data))
+        return resp.data
+    }
+    catch(e){
+        // return {}
+        console.log(e)
+    }
 
 }
 
@@ -57,6 +69,13 @@ function capitalize(string) {
 }
 
 const direction = capitalize(process.argv[2])
-SubmitAttendance(process.env.CLOUDUSERNAME,process.env.PASSWORD,direction)
+
+if (process.argv[1] === __filename) {
+    SubmitAttendance(process.env.CLOUDUSERNAME, process.env.PASSWORD, direction);
+}
+// SubmitAttendance(process.env.CLOUDUSERNAME,process.env.PASSWORD,direction)
 
 // doLogin();
+
+
+export {SubmitAttendance}
