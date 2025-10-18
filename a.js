@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 import { extractTokensAndCsrf,generatePayload } from './utils.js';
-import { getreq, login } from './functions.js';
+import { axiosInstance, getreq, login } from './functions.js';
 
 const config = {
     headers: {
@@ -34,11 +34,14 @@ const SubmitAttendance = async (username,password,direction) => {
         
         const url = "https://cloudtechservice.nimbleerp.com/Attendance/QuickAttendanceRequest/QuickAttendance";
         
-        
+        console.log(payload);
         
         const resp = await axios.post(url,payload,config);
         console.log(resp.data);
         fs.writeFileSync("a.txt",JSON.stringify(resp.data))
+
+        loginAndShowAttendance();
+
         return resp.data
     }
     catch(e){
@@ -49,15 +52,20 @@ const SubmitAttendance = async (username,password,direction) => {
 }
 
 
-const doLogin = async () => {
+const loginAndShowAttendance = async () => {
     const result  = await axios.get('https://cloudtechservice.nimbleerp.com/');
     const session = extractTokensAndCsrf(result);
-    const res = await login('122',"ssss21",session,config);
-    console.log(res.data)
+    const res = await login('122',"abcdef",session,config);
+    // console.log(res.data)
 
-    // const attendanceUrl = "https://cloudtechservice.nimbleerp.com/Attendance/Reports/GetDailyReport?DateFrom=2082%2F01%2F01&DateTo=2082%2F01%2F31&AttendanceStatus=-1&LogEntries=In&TimeFrom=&TimeTo=&ischeckResigned=false&EmpCode=E00031&WorkingStatusID=1&WorkingStatusID=4&WorkingStatusID=8"
-    // const r = await getreq(attendanceUrl,config);
-    // console.log(r.data.Object)
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+
+    const logUrl = `/Attendance/Reports/AttendanceDetailForCalendar?from=nepali&start1=${year}%2F${month}%2F${day}&end1=${year}%2F${month}%2F${day}&EmpCode=E00031`
+    const log = await axiosInstance.get(logUrl,config);
+    console.log(log.data);
 
 }
 
@@ -73,9 +81,8 @@ const direction = capitalize(process.argv[2])
 if (process.argv[1] === __filename) {
     SubmitAttendance(process.env.CLOUDUSERNAME, process.env.PASSWORD, direction);
 }
-// SubmitAttendance(process.env.CLOUDUSERNAME,process.env.PASSWORD,direction)
 
-// doLogin();
+
 
 
 export {SubmitAttendance}
