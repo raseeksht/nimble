@@ -1,15 +1,22 @@
 
-import cron from 'node-cron';
 import { SubmitAttendance } from './a.js';
 import axios from 'axios';
-import cronstrue from 'cronstrue';
 
-const inCron = '0 14 * * 1,2';
-const outCron = '5 23 * * 1,2';
+const allowedWeekdays = [1, 2, 3, 4, 5]; // Monday, Tuesday, Wednesday, Thursday, Friday (0 = Sunday)
+
+const timeWindows = {
+    In: { startHour: 13, startMinute: 55, endHour: 14, endMinute: 0 }, // 1:55 PM - 2:00 PM
+    Out: { startHour: 23, startMinute: 0, endHour: 23, endMinute: 5 }, // 11:00 PM - 11:05 PM
+};
+
+const lastScheduledSlot = {
+    In: null,
+    Out: null,
+};
 
 
 const discord = async (msg,direction) => {
-    const res = await axios.post(process.env.WEBHOOK, {
+    await axios.post(process.env.WEBHOOK, {
         embeds: [{
             title: 'Attendance Status',
             description: `Response : ${msg?.Message || JSON.stringify(msg)}`,
@@ -33,24 +40,73 @@ const discord = async (msg,direction) => {
     });
 }
 
-const initCronJob = async(expression,direction) => {
-    const allowedDirections = ['In','Out'];
-    if (!allowedDirections.includes(direction)){
-        throw new Error(`Invalid Direction ${direction}`)
+const getRandomTimeSlot = (direction) => {
+    const window = timeWindows[direction];
+    const startTotal = (window.startHour * 60) + window.startMinute;
+    const endTotal = (window.endHour * 60) + window.endMinute;
+    const totalChoices = (endTotal - startTotal) + 1;
+
+    let pickedTotal = startTotal + Math.floor(Math.random() * totalChoices);
+    const previousTotal = lastScheduledSlot[direction];
+
+    // Avoid picking the same time twice in a row when there are alternatives.
+    if (totalChoices > 1 && previousTotal !== null && pickedTotal === previousTotal) {
+        pickedTotal = startTotal + ((pickedTotal - startTotal + 1) % totalChoices);
     }
-    cron.schedule(expression, async () => {
-        const resp = await SubmitAttendance(process.env.CLOUDUSERNAME,process.env.PASSWORD,direction)
-        discord(resp,direction)
-        console.log(`${direction} Attendance Submitted..`);
-    });
-    console.log(cronstrue.toString(expression),`${direction} Time`)
+
+    lastScheduledSlot[direction] = pickedTotal;
+    return {
+        hour: Math.floor(pickedTotal / 60),
+        minute: pickedTotal % 60,
+    };
+}
+
+const getNextRunDate = (direction, fromDate = new Date()) => {
+    for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+        const candidate = new Date(fromDate);
+        candidate.setDate(fromDate.getDate() + dayOffset);
+
+        if (!allowedWeekdays.includes(candidate.getDay())) {
+            continue;
+        }
+
+        const { hour, minute } = getRandomTimeSlot(direction);
+        candidate.setHours(hour + 2, minute, 0, 0); // offset by 2 hours for 4pm - 1am 
+
+        if (candidate > fromDate) {
+            return candidate;
+        }
+    }
+
+    throw new Error(`Could not find next run date for ${direction}`);
+}
+
+const scheduleNextAttendance = (direction, fromDate) => {
+    const nextRun = getNextRunDate(direction, fromDate);
+    const delay = nextRun.getTime() - Date.now();
+
+    console.log(`${direction} scheduled for ${nextRun.toLocaleString()}`);
+
+    setTimeout(async () => {
+        try {
+            const resp = await SubmitAttendance(process.env.CLOUDUSERNAME, process.env.PASSWORD, direction);
+            await discord(resp, direction);
+            console.log(`${direction} Attendance Submitted..`);
+        } catch (error) {
+            console.error(`${direction} Attendance failed:`, error?.message || error);
+        } finally {
+            // Always schedule the next random run after this one finishes.
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            scheduleNextAttendance(direction, tomorrow);
+        }
+    }, delay);
 }
 
 const main = async () => {
-    // discord(await SubmitAttendance('a','b','c'));
-    // const resp = await SubmitAttendance(process.env.CLOUDUSERNAME,process.env.PASSWORD,'In')
-    initCronJob(inCron,'In');
-    initCronJob(outCron,'Out');
+    scheduleNextAttendance('In');
+    scheduleNextAttendance('Out');
 
 }
 

@@ -55,7 +55,7 @@ const SubmitAttendance = async (username,password,direction) => {
 const loginAndShowAttendance = async () => {
     const result  = await axios.get('https://cloudtechservice.nimbleerp.com/');
     const session = extractTokensAndCsrf(result);
-    const res = await login('122',"abcdef",session,config);
+    const res = await login(process.env.CLOUDUSERNAME,process.env.PASSWORD,session,config);
     // console.log(res.data)
 
     const today = new Date();
