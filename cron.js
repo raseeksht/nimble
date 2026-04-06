@@ -14,6 +14,12 @@ const lastScheduledSlot = {
     Out: null,
 };
 
+const NEPAL_OFFSET_MS = (5 * 60 + 45) * 60 * 1000; // UTC+5:45
+
+const toNepalTime = (date) => {
+    return date.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' });
+};
+
 
 const discord = async (msg,direction) => {
     await axios.post(process.env.WEBHOOK, {
@@ -29,7 +35,7 @@ const discord = async (msg,direction) => {
                 },
                 {
                 name: "Time",
-                value: new Date().toLocaleString(),
+                value: toNepalTime(new Date()),
                 inline: true
                 },
             ],
@@ -62,19 +68,23 @@ const getRandomTimeSlot = (direction) => {
 }
 
 const getNextRunDate = (direction, fromDate = new Date()) => {
-    for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
-        const candidate = new Date(fromDate);
-        candidate.setDate(fromDate.getDate() + dayOffset);
+    // Shift so UTC fields represent Nepal time
+    const fromNepal = new Date(fromDate.getTime() + NEPAL_OFFSET_MS);
 
-        if (!allowedWeekdays.includes(candidate.getDay())) {
+    for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+        const candidate = new Date(fromNepal);
+        candidate.setUTCDate(fromNepal.getUTCDate() + dayOffset);
+
+        if (!allowedWeekdays.includes(candidate.getUTCDay())) {
             continue;
         }
 
         const { hour, minute } = getRandomTimeSlot(direction);
-        candidate.setHours(hour + 2, minute, 0, 0); // offset by 2 hours for 4pm - 1am 
+        candidate.setUTCHours(hour + 2, minute, 0, 0); // offset by 2 hours for 4pm - 1am
 
-        if (candidate > fromDate) {
-            return candidate;
+        if (candidate > fromNepal) {
+            // Convert back to real time
+            return new Date(candidate.getTime() - NEPAL_OFFSET_MS);
         }
     }
 
@@ -85,7 +95,10 @@ const scheduleNextAttendance = (direction, fromDate) => {
     const nextRun = getNextRunDate(direction, fromDate);
     const delay = nextRun.getTime() - Date.now();
 
-    console.log(`${direction} scheduled for ${nextRun.toLocaleString()}`);
+    const totalMin = Math.round(delay / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    console.log(`${direction} scheduled for ${toNepalTime(nextRun)} (in ${h}h ${m}m)`);
 
     setTimeout(async () => {
         try {
@@ -96,9 +109,11 @@ const scheduleNextAttendance = (direction, fromDate) => {
             console.error(`${direction} Attendance failed:`, error?.message || error);
         } finally {
             // Always schedule the next random run after this one finishes.
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(0, 0, 0, 0);
+            // Compute tomorrow midnight in Nepal time, then convert to real time
+            const nowNepal = new Date(Date.now() + NEPAL_OFFSET_MS);
+            nowNepal.setUTCDate(nowNepal.getUTCDate() + 1);
+            nowNepal.setUTCHours(0, 0, 0, 0);
+            const tomorrow = new Date(nowNepal.getTime() - NEPAL_OFFSET_MS);
             scheduleNextAttendance(direction, tomorrow);
         }
     }, delay);
