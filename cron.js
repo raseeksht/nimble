@@ -80,7 +80,7 @@ const getNextRunDate = (direction, fromDate = new Date()) => {
         }
 
         const { hour, minute } = getRandomTimeSlot(direction);
-        candidate.setUTCHours(hour + 2, minute, 0, 0); // offset by 2 hours for 4pm - 1am
+        candidate.setUTCHours((hour + 2) % 24, minute, 0, 0); // offset by 2 hours for 4pm - 1am
 
         if (candidate > fromNepal) {
             // Convert back to real time
